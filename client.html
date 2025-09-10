@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Hanger Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        div { margin-bottom: 10px; }
+        input[type="text"], input[type="number"] { width: 200px; padding: 8px; margin-right: 10px; }
+        button { padding: 10px 15px; cursor: pointer; }
+        pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>Smart Hanger Client</h1>
+
+    <h2>센서 데이터 전송 (POST)</h2>
+    <div>
+        <label for="postDeviceId">장치 ID:</label>
+        <input type="text" id="postDeviceId" value="hanger001">
+    </div>
+    <div>
+        <label for="postHumidity">습도:</label>
+        <input type="number" id="postHumidity" value="60">
+    </div>
+    <div>
+        <label for="postWeight">무게:</label>
+        <input type="number" id="postWeight" step="0.1" value="5.5">
+    </div>
+    <div>
+        <label for="postUvc">UVC:</label>
+        <input type="checkbox" id="postUvc">
+    </div>
+    <div>
+        <label for="postTemperature">온도:</label>
+        <input type="number" id="postTemperature" step="0.1" value="25.0">
+    </div>
+    <div>
+        <label for="postDoorOpen">문 열림:</label>
+        <input type="checkbox" id="postDoorOpen">
+    </div>
+    <div>
+        <label for="postMode">모드:</label>
+        <input type="text" id="postMode" value="idle">
+    </div>
+    <div>
+        <label for="postHeaterOn">히터 켜짐:</label>
+        <input type="checkbox" id="postHeaterOn">
+    </div>
+    <div>
+        <label for="postFanOn">팬 켜짐:</label>
+        <input type="checkbox" id="postFanOn">
+    </div>
+    <div>
+        <label for="postUvOn">UV 켜짐:</label>
+        <input type="checkbox" id="postUvOn">
+    </div>
+    <button onclick="sendSensorData()">데이터 전송</button>
+    <pre id="postResponse"></pre>
+
+    <h2>장치 상태 조회 (GET)</h2>
+    <div>
+        <label for="getDeviceId">Device ID:</label>
+        <input type="text" id="getDeviceId" value="hanger001">
+    </div>
+    <button onclick="getSensorData()">상태 조회</button>
+    <pre id="getResponse"></pre>
+
+    <h2>주기적 데이터 전송</h2>
+    <div>
+        <label for="intervalSeconds">전송 주기 (초):</label>
+        <input type="number" id="intervalSeconds" value="5" min="1">
+        <button onclick="startPeriodicUpload()">시작</button>
+        <button onclick="stopPeriodicUpload()">중지</button>
+    </div>
+    <pre id="periodicResponse"></pre>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000/api';
+        let periodicUploadIntervalId = null;
+
+        async function sendSensorData(targetResponseElementId = 'postResponse') {
+            const deviceId = document.getElementById('postDeviceId').value;
+            const humidity = parseFloat(document.getElementById('postHumidity').value);
+            const weight = parseFloat(document.getElementById('postWeight').value);
+            const uvc = document.getElementById('postUvc').checked;
+            const temperature = parseFloat(document.getElementById('postTemperature').value);
+            const doorOpen = document.getElementById('postDoorOpen').checked;
+            const mode = document.getElementById('postMode').value;
+            const heaterOn = document.getElementById('postHeaterOn').checked;
+            const fanOn = document.getElementById('postFanOn').checked;
+            const uvOn = document.getElementById('postUvOn').checked;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ deviceId, humidity, weight, uvc, temperature, doorOpen, mode, heaterOn, fanOn, uvOn })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById(targetResponseElementId).textContent = `성공!\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById(targetResponseElementId).textContent = `실패: ${data.message || response.statusText}\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                document.getElementById(targetResponseElementId).textContent = `Error: ${error.message}`;
+                console.error('Error sending sensor data:', error);
+            }
+        }
+
+        function startPeriodicUpload() {
+            if (periodicUploadIntervalId) {
+                alert('주기적 전송이 이미 실행 중입니다.');
+                return;
+            }
+            const intervalSeconds = parseInt(document.getElementById('intervalSeconds').value);
+            if (isNaN(intervalSeconds) || intervalSeconds <= 0) {
+                alert('유효한 전송 주기를 입력해주세요 (1초 이상).');
+                return;
+            }
+            periodicUploadIntervalId = setInterval(() => sendSensorData('periodicResponse'), intervalSeconds * 1000);
+            alert(`${intervalSeconds}초마다 주기적 전송을 시작합니다.`);
+        }
+
+        function stopPeriodicUpload() {
+            if (periodicUploadIntervalId) {
+                clearInterval(periodicUploadIntervalId);
+                periodicUploadIntervalId = null;
+                alert('주기적 전송을 중지했습니다.');
+            } else {
+                alert('주기적 전송이 실행 중이 아닙니다.');
+            }
+        }
+
+        async function getSensorData() {
+            const deviceId = document.getElementById('getDeviceId').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/status/${deviceId}`);
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('getResponse').textContent = `성공!\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('getResponse').textContent = `실패: ${data.message || response.statusText}\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                document.getElementById('getResponse').textContent = `Error: ${error.message}`;
+                console.error('Error getting sensor data:', error);
+            }
+        }
+    </script>
+</body>
+</html>
